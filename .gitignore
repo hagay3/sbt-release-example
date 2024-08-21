@@ -1,0 +1,17 @@
+*.class
+*.log
+.DS_Store
+/**/.idea
+/.idea_modules
+.bloop
+/.bsp
+.metals
+metals.sbt
+/**/src/main/resources/version.conf
+/**/target
+*.jar
+*~
+.vscode
+.jvmopts
+*.tgz
+hs_err_pid*
