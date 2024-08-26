@@ -98,3 +98,5 @@ https://github.com/hagay3/sbt-release-example/blob/master/.github/workflows/rele
 
 
 
+## Example Source code
+https://github.com/hagay3/sbt-release-example
