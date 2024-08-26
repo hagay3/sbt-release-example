@@ -1,102 +1,95 @@
-# Publishing sbt modules like a champ
+# Publishing sbt Modules Like a Pro
 
-* `sbt` (Scala Build Tool) is a build automation tool specifically designed for Scala and Java projects, providing features like dependency management, compilation, testing, and deployment.
+`sbt` (Scala Build Tool) is a powerful build automation tool designed for Scala and Java projects. It handles tasks such as dependency management, compilation, testing, and deployment.
 
-* `sbt-release` plugin - a tool for the Scala Build Tool (SBT) that automates the release process of a project by managing versioning, tagging, and publishing artifacts, ensuring consistent and reproducible releases.
+The `sbt-release` plugin enhances `sbt` by automating the release process. It manages versioning, tagging, and artifact publishing, ensuring consistent, reproducible releases.
 
+## The Goal
+We aim to automate the release of `sbt` packages without manually editing version files or typing complex `sbt` commands. Upon merging to the master branch, the version should automatically increment, and the package should be published to the target repository.
 
-## The mission
-We want to release sbt packages automatically without modifying version files and without typing awkward sbt commands.
-Upon merge to master - automatically bump the version and publish the package to a desired repository.
+### Release Workflow
+1. **Create a Feature Branch:** Make necessary changes on a new branch.
+2. **CI Validation:** Ensure the build and tests pass through Continuous Integration (CI).
+3. **Merge to Master:** Once CI passes, merge the branch into master.
+4. **Version Bump:** Use GitHub Actions to automatically bump the version (via `sbt-release`).
+5. **Publish Package:** Publish the package to the desired repository (e.g., Nexus) using GitHub Actions.
+6. **Sync Master:** Merge the updated version back into the master branch.
 
-### Release flow
-1. Create a new branch with the desired modified files
-2. Go trough the CI flow to make sure build and tests finish successfully
-3. Merge the branch to master
-4. Github Actions: Automatically bump the package version (with sbt-release)
-5. Github Actions: Publish the package to a desired repo (e.g Nexus)
-6. Github Actions: Merge the bumped version to master branch
+## Repository Structure
+To publish multiple packages from the same repository, structure the modules so that each has its own directory and version file.
 
-## Repo structure
-In order to publish multiple packages from the same repository we can have the modules structured and each module will have it's own directory and version.
+## Project Settings
+Here’s how you can define project settings in your `sbt` build:
 
-
-## Define project settings
 ```scala
-  def baseModule(module: String, subFolder: String): Project = {
-    val versionFile = s"./modules/$subFolder/$module/$module.version.sbt"
-    val currentVersion = getCurrentVersion(versionFile)
-    Project(
-      id = module,
-      base = file(s"./modules/$subFolder/$module")
-    ).settings(
-        Seq(
-          organization := s"$rootProjectName.$subFolder.",
-          name := module,
-          publishTo := {
-            Some("Nexus" at "https://some.host.server.com/repository/maven-releases/")
-            ,
-          },
-          releaseVersionFile := file(versionFile),
-          scalaVersion := buildScalaVersion,
-          releaseNextVersion := {
-            ver =>
-              Version(ver).map(_.bump(releaseVersionBump.value).string).getOrElse(versionFormatError(ver))
-          },
-          releaseTagName := s"$module-v${releaseNextVersion.value.apply(currentVersion)}",
-          versionScheme := Some("early-semver"),
-          // sbt-release plugin steps
-          releaseProcess := {
-            finalReleaseSteps
-          },
-        ))
-  }
-
-  def getCurrentVersion(versionFile: String): String = {
-    val file = new File(versionFile)
-    val source = Source.fromFile(file)
-    val lines = try source.mkString finally source.close()
-    val version = lines.split("=")(1).trim
-      .replace("\"", "")
-    version
-  }
-```
-With the above sbt project settings we can define:
-1. The version file location and name for each module
-2. Fetching current version of the module with ``getCurrentVersion``
-3. Telling sbt-release plugin how to bump the version with:
-```scala
-   releaseNextVersion := {
-      ver => Version(ver).map(_.bump(releaseVersionBump.value).string).getOrElse(versionFormatError(ver))
-   }
-```
-
-## Define the release steps
-sbt-release plugin works with specific steps to set and bump the next sbt version. 
-```scala
-  private val finalReleaseSteps = Seq[ReleaseStep](
-    checkSnapshotDependencies, // : ReleaseStep
-    inquireVersions, // : ReleaseStep
-    runClean, // : sbt clean
-    runTest, // : sbt test
-    setNextVersion, // : bump the module version (according to releaseNextVersion)
-    commitNextVersion, // : git commit
-    tagRelease, // : git tag (the new version)
-    publishArtifacts, // : ReleaseStep, checks whether `publishTo` is properly set up (e.g: publish artifacts to nexus)
-    pushChanges // : git push
+def baseModule(module: String, subFolder: String): Project = {
+  val versionFile = s"./modules/$subFolder/$module/$module.version.sbt"
+  val currentVersion = getCurrentVersion(versionFile)
+  Project(
+    id = module,
+    base = file(s"./modules/$subFolder/$module")
+  ).settings(
+    Seq(
+      organization := s"$rootProjectName.$subFolder.",
+      name := module,
+      publishTo := Some("Nexus" at "https://some.host.server.com/repository/maven-releases/"),
+      releaseVersionFile := file(versionFile),
+      scalaVersion := buildScalaVersion,
+      releaseNextVersion := { ver =>
+        Version(ver).map(_.bump(releaseVersionBump.value).string).getOrElse(versionFormatError(ver))
+      },
+      releaseTagName := s"$module-v${releaseNextVersion.value.apply(currentVersion)}",
+      versionScheme := Some("early-semver"),
+      releaseProcess := finalReleaseSteps
+    )
   )
+}
+
+def getCurrentVersion(versionFile: String): String = {
+  val file = new File(versionFile)
+  val source = Source.fromFile(file)
+  val lines = try source.mkString finally source.close()
+  val version = lines.split("=")(1).trim.replace("\"", "")
+  version
+}
 ```
 
-## Wrap the automation with Github Actions
-Finally, wrapping the automation with Github Actions workflow:
-1. Checkout master branch upon merge
-2. List all modified modules
-3. Execute sbt-release plugin command
-4. Add comment to PR with released version
+### Explanation:
+1. **Version File Location:** Specifies the location and name of the version file for each module.
+2. **Current Version Retrieval:** Fetches the current version using `getCurrentVersion`.
+3. **Version Bumping:** Defines how the `sbt-release` plugin should bump the version.
 
-https://github.com/hagay3/sbt-release-example/blob/master/.github/workflows/release.yaml
+```scala
+releaseNextVersion := {
+  ver => Version(ver).map(_.bump(releaseVersionBump.value).string).getOrElse(versionFormatError(ver))
+}
+```
 
+## Release Steps
+The `sbt-release` plugin defines specific steps for setting and bumping the next version:
 
+```scala
+private val finalReleaseSteps = Seq[ReleaseStep](
+  checkSnapshotDependencies,  // Check for snapshot dependencies
+  inquireVersions,            // Ask for the next version number
+  runClean,                   // Clean the project (sbt clean)
+  runTest,                    // Run tests (sbt test)
+  setNextVersion,             // Bump the module version
+  commitNextVersion,          // Commit the new version
+  tagRelease,                 // Tag the new release in Git
+  publishArtifacts,           // Publish artifacts (e.g., to Nexus)
+  pushChanges                 // Push changes to the repository
+)
+```
 
-## Example Source code
-https://github.com/hagay3/sbt-release-example
+## Automate with GitHub Actions
+Finally, integrate the automation using a GitHub Actions workflow:
+1. Checkout the master branch after a merge.
+2. Identify modified modules.
+3. Execute the `sbt-release` plugin.
+4. Comment on the PR with the released version details.
+
+For a practical example, check out the [Release Workflow](https://github.com/hagay3/sbt-release-example/blob/master/.github/workflows/release.yaml).
+
+## Example Source Code
+Explore the full source code [here](https://github.com/hagay3/sbt-release-example).
