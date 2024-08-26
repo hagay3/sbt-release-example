@@ -9,7 +9,7 @@
 We want to release sbt packages automatically without modifying version files and without typing awkward sbt commands.
 Upon merge to master - automatically bump the version and publish the package to a desired repository.
 
-Release flow
+### Release flow
 1. Create a new branch with the desired modified files
 2. Go trough the CI flow to make sure build and tests finish successfully
 3. Merge the branch to master
