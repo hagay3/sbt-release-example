@@ -87,5 +87,14 @@ sbt-release plugin works with specific steps to set and bump the next sbt versio
   )
 ```
 
+## Wrap the automation with Github Actions
+Finally, wrapping the automation with Github Actions workflow:
+1. Checkout master branch upon merge
+2. List all modified modules
+3. Execute sbt-release plugin command
+4. Add comment to PR with released version
+
+https://github.com/hagay3/sbt-release-example/blob/master/.github/workflows/release.yaml
+
 
 
