@@ -72,14 +72,6 @@ object BuildSettings {
           releaseUseGlobalVersion := false,
           releaseIgnoreUntrackedFiles := true,
           packageDoc / publishArtifact := false,
-          publishLocalConfiguration := publishLocalConfiguration.value.withOverwrite(true),
-          Test / fork := false,
-          Test / logBuffered := false,
-          Test / packageBin / publishArtifact := true,
-          // F stands for full stacktraces in the output
-          // I for summaries at the end of the run without stacktraces
-          // https://www.scalatest.org/user_guide/using_scalatest_with_sbt
-          Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oFI"),
           releaseNextVersion := {
             ver =>
               Version(ver).map(_.bump(releaseVersionBump.value).string).getOrElse(versionFormatError(ver))

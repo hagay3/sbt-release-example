@@ -1,0 +1,108 @@
+name: Release
+on:
+  pull_request:
+    types: [opened, closed]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: read
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: View context attributes
+        uses: actions/github-script@v6
+        with:
+          script: console.log(context)
+      - name: Checkout upon merge to master (final release)
+        if: github.event.pull_request.merged == true
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
+          fetch-depth: 0
+
+      - name: List all modified modules
+        run: |
+          touch modified_files.txt
+          touch modules.txt
+          
+          git diff --name-only HEAD^ HEAD modules/ > modified_files.txt  
+          
+          echo "all modified files"
+          cat modified_files.txt
+
+          module_name_comment=$(echo ${{ github.event.comment.body }} | cut -d' ' -f2 | sed 's/\/release//g' )
+          echo "module_name_comment: $module_name_comment"
+          
+          for file in $(cat modified_files.txt); do
+            module=$(echo $file | cut -d'/' -f3)
+            echo $module >> modules.txt
+          done
+          
+          # remove duplicates
+          sort -u -o modules.txt modules.txt
+          # remove empty lines
+          sed -i '/^$/d' modules.txt
+            
+          echo "modules.txt"
+          cat modules.txt
+
+      - name: Release
+        shell: bash
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
+          
+          release_modules() {
+            file_name=$1
+            for module_name in $(cat $file_name); do
+              echo "Releasing $module_name"
+              sbt -mem 4000 "project $module_name" "release with-defaults"
+  
+              echo "....."
+              sbt_out=$(sbt --no-colors "project $module_name" "version")
+              echo $sbt_out
+              release_version=$(echo $sbt_out | rev | cut -d' ' -f1 | rev)
+              echo "....."
+  
+              echo "Release Version:"
+              echo "##################"
+              echo $module_name
+              echo $release_version
+              echo "##################"
+              echo "done"
+              echo $module_name,$release_version >> releases.txt
+              cat releases.txt
+            done
+          }
+   
+          release_modules modules.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - run: npm install csv-to-markdown-table
+      - name: Add comment to PR
+        uses: actions/github-script@v6
+        if: success() # Run only if release step succeeded and releases.txt exists
+        with:
+          script: |
+            const fs = require("fs");
+            const csvToMarkdown = require("csv-to-markdown-table");
+            let body = ''
+            if (fs.existsSync("releases.txt")) {
+              const url = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+              const releases = fs.readFileSync('releases.txt', 'utf8').replace(/\n$/, "");
+              const releasesHeaders = "module,version\n" + releases;
+              const releasesMarkdown = csvToMarkdown(releasesHeaders, ",", true)
+              body = `✅ Released:\n${releasesMarkdown}`;
+              body += `\n${url}`
+            
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              })
+            }
